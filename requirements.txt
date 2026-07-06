@@ -2,3 +2,5 @@ behave==1.2.6
 pytest>=8.0
 pandas>=2.0
 jinja2>=3.1
+python-can>=4.0
+cantools>=39.0

@@ -1,0 +1,28 @@
+VERSION ""
+
+NS_ :
+
+BS_:
+
+BU_: BMS TESTER
+
+
+BO_ 256 PackStatus: 8 BMS
+ SG_ SoC_percent : 0|8@1+ (1,0) [0|100] "%" TESTER
+ SG_ PackCurrent_A : 8|16@1- (0.1,0) [-3276.8|3276.7] "A" TESTER
+ SG_ MinCellVoltage_V : 24|16@1+ (0.001,0) [0|65.535] "V" TESTER
+ SG_ MaxCellVoltage_V : 40|16@1+ (0.001,0) [0|65.535] "V" TESTER
+
+BO_ 257 FaultFlags: 1 BMS
+ SG_ Fault_OVP : 0|1@1+ (1,0) [0|1] "" TESTER
+ SG_ Fault_UVP : 1|1@1+ (1,0) [0|1] "" TESTER
+ SG_ Fault_OTP : 2|1@1+ (1,0) [0|1] "" TESTER
+ SG_ Fault_OCP : 3|1@1+ (1,0) [0|1] "" TESTER
+ SG_ Fault_HVIL : 4|1@1+ (1,0) [0|1] "" TESTER
+ SG_ ContactorsClosed : 5|1@1+ (1,0) [0|1] "" TESTER
+
+BO_ 258 ChargingStatus: 1 BMS
+ SG_ ChargingState : 0|8@1+ (1,0) [0|5] "" TESTER
+
+
+VAL_ 258 ChargingState 0 "UNPLUGGED" 1 "PLUGGED" 2 "HANDSHAKE" 3 "CHARGING" 4 "COMPLETE" 5 "FAULTED" ;

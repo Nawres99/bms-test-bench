@@ -19,6 +19,7 @@ recovery paths, and reporting.
 | ECU-TEST orchestrates test cases | behave (Gherkin) + pytest |
 | ATX report generation | `tools/report.py` (pandas + jinja2) |
 | CI integration | GitHub Actions and GitLab CI, both in this repo |
+| Signals read off the vehicle CAN bus | `bms/canbus.py` + `can/bms.dbc` on python-can's virtual bus |
 
 ## What is covered
 
@@ -48,9 +49,17 @@ deliberate limit violations, so the report has something to show.
 
 ## Status / next steps
 
+Done since the first version:
+
+- CAN: the pack status, fault flags and charging state are published as CAN
+  frames on a virtual bus and decoded back with a DBC (`can/bms.dbc`,
+  `bms/canbus.py`). It is python-can's in-process virtual bus, so there is no
+  real bit rate, arbitration or timing - just the encode and decode path a
+  bench relies on.
+
+Still simplified or missing:
+
 - The pack model has no voltage response to current (voltages are injected by
   the tests). Fine for testing the logic, wrong for physics.
-- I want to add python-can with a virtual bus, so the pack publishes its
-  state as CAN frames and the tests consume them like a real bench would.
 - Thermal behaviour is injected, not modelled.
 - No SoH estimation yet.
