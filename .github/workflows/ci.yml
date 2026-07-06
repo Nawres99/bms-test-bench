@@ -1,0 +1,23 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: unit tests
+        run: pytest -v
+      - name: bdd scenarios
+        run: behave --format progress
+      - name: sample report
+        run: python tools/report.py samples/drive_cycle_log.csv -o report.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bms-log-report
+          path: report.html
