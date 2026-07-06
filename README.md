@@ -42,6 +42,7 @@ pip install -r requirements.txt
 pytest -v            # unit tests
 behave               # BDD scenarios
 python tools/report.py samples/drive_cycle_log.csv -o report.html
+python tools/report.py samples/drive_cycle_can.log -o report.html  # same report from a CAN log
 ```
 
 The sample log contains a short synthetic drive-and-charge cycle with a few

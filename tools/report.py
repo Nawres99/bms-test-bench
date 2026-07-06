@@ -1,12 +1,15 @@
-"""Generate an HTML report from a signal log CSV.
+"""Generate an HTML report from a signal log.
 
-Reads a log with per-second pack measurements, checks every row against the
-protection limits, and writes a small standalone HTML report. This is my
-stand-in for the report generators a real bench tool produces (ECU-TEST
-calls them ATX reports).
+The input can be either a CSV of per-second pack measurements, or a candump-format
+CAN log of the frames defined in ``can/bms.dbc``. Either way the tool checks every
+sample against the protection limits and writes a small standalone HTML report.
+This is my stand-in for the report generators a real bench tool produces (ECU-TEST
+calls them ATX reports), and reading a bus log is closer to what a bench actually
+does after a test run.
 
 Usage:
     python tools/report.py samples/drive_cycle_log.csv -o report.html
+    python tools/report.py samples/drive_cycle_can.log -o report.html
 """
 
 import argparse
@@ -19,6 +22,20 @@ from jinja2 import Template
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from bms.protection import Limits  # noqa: E402
+
+DBC_PATH = Path(__file__).resolve().parent.parent / "can" / "bms.dbc"
+
+# Signals the report knows how to summarise and limit-check. A CAN log only
+# carries a subset (no temperature on the bus in this project), so anything
+# missing from the input is simply skipped.
+ALL_SIGNALS = ["pack_current_a", "min_cell_voltage_v", "max_cell_voltage_v", "max_cell_temp_c"]
+
+# DBC signal name -> report column name, for the analog signals in PackStatus.
+CAN_SIGNAL_COLUMNS = {
+    "PackCurrent_A": "pack_current_a",
+    "MinCellVoltage_V": "min_cell_voltage_v",
+    "MaxCellVoltage_V": "max_cell_voltage_v",
+}
 
 TEMPLATE = Template("""\
 <!doctype html>
@@ -57,6 +74,37 @@ TEMPLATE = Template("""\
 """)
 
 
+def frames_to_dataframe(log_path):
+    """Read a candump CAN log, decode the PackStatus frames with the DBC, and
+    return a dataframe shaped like the CSV the report already understands."""
+    from can import CanutilsLogReader
+    import cantools
+
+    db = cantools.database.load_file(DBC_PATH)
+    pack_status = db.get_message_by_name("PackStatus")
+    rows = []
+    start = None
+    for frame in CanutilsLogReader(str(log_path)):
+        if frame.arbitration_id != pack_status.frame_id:
+            continue  # only PackStatus carries the analog signals we report on
+        if start is None:
+            start = frame.timestamp
+        decoded = db.decode_message(frame.arbitration_id, frame.data)
+        row = {"time_s": round(frame.timestamp - start)}
+        for signal, column in CAN_SIGNAL_COLUMNS.items():
+            row[column] = float(decoded[signal])
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def load_dataframe(source_path):
+    """Load either a CSV of samples or a candump .log, chosen by file suffix."""
+    source_path = Path(source_path)
+    if source_path.suffix == ".log":
+        return frames_to_dataframe(source_path)
+    return pd.read_csv(source_path)
+
+
 def find_violations(df, limits):
     violations = []
     checks = [
@@ -71,6 +119,8 @@ def find_violations(df, limits):
     ]
     for _, row in df.iterrows():
         for name, column, trips, limit in checks:
+            if column not in df.columns:
+                continue  # signal not present in this log (e.g. temperature on a CAN log)
             value = row[column]
             if trips(value):
                 violations.append({
@@ -80,17 +130,18 @@ def find_violations(df, limits):
     return violations
 
 
-def build_report(csv_path, output_path):
-    df = pd.read_csv(csv_path)
+def build_report(source_path, output_path):
+    df = load_dataframe(source_path)
     limits = Limits()
-    signals = ["pack_current_a", "min_cell_voltage_v", "max_cell_voltage_v", "max_cell_temp_c"]
     summary = [
-        {"name": s, "min": df[s].min(), "max": df[s].max()} for s in signals
+        {"name": s, "min": df[s].min(), "max": df[s].max()}
+        for s in ALL_SIGNALS if s in df.columns
     ]
+    duration = int(df["time_s"].max() - df["time_s"].min()) if not df.empty else 0
     html = TEMPLATE.render(
-        source=csv_path,
+        source=source_path,
         rows=len(df),
-        duration=int(df["time_s"].max() - df["time_s"].min()),
+        duration=duration,
         summary=summary,
         violations=find_violations(df, limits),
     )
@@ -100,7 +151,7 @@ def build_report(csv_path, output_path):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("csv", help="signal log csv")
+    parser.add_argument("source", help="signal log: a .csv of samples or a candump .log of CAN frames")
     parser.add_argument("-o", "--output", default="report.html")
     args = parser.parse_args()
-    build_report(args.csv, args.output)
+    build_report(args.source, args.output)
